@@ -35,7 +35,10 @@ GRAFANA_PASSWORD = os.getenv("GRAFANA_PASSWORD", "e1e175013a75")
 # Report Time Format:
 # Use "%H.00" to display only the current hour (e.g. 15.00)
 # Use "%H.%M" to display the exact minute of execution (e.g. 15.28)
-REPORT_TIME_FORMAT = "%H.00"
+REPORT_TIME_FORMAT = "%H.%M"
+
+# Schedule Times (comma-separated, e.g., '08:00,12:00,16:00')
+SCHEDULE_TIMES = os.getenv("SCHEDULE_TIMES", "")
 
 # Kibana Dashboards Configuration
 # We specify the URL and selectors (CSS Selector or XPath) for each dashboard.

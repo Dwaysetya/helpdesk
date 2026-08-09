@@ -52,15 +52,11 @@ def run_once(target: str):
     # If anything failed, return False
     return success_telegram and success_whatsapp
 
-def run_scheduler_loop(interval_minutes: int):
+def run_scheduler_loop(interval_minutes: int, target: str, times: str = None):
     """
     Runs a background daemon loop using Python's schedule library.
-    Every 2 hours (120 min) -> Telegram
-    Every 4 hours (240 min) -> Telegram + WhatsApp
-    
-    We tick every 2 hours:
-      - Odd runs: Telegram only
-      - Even runs: Telegram + WhatsApp
+    If times are provided, schedules runs daily at those specific times.
+    Otherwise, ticks every interval_minutes.
     """
     try:
         import schedule
@@ -68,33 +64,44 @@ def run_scheduler_loop(interval_minutes: int):
         logger.error("The 'schedule' library is not installed. Run: pip install schedule")
         sys.exit(1)
         
-    logger.info(f"Starting background scheduler daemon. Ticking every {interval_minutes} minutes.")
+    logger.info("Starting background scheduler daemon.")
     
     # We maintain a state counter.
     # Note: On startup, we run once immediately.
     # We ask if they want to run immediately, or just start scheduling. Let's run a test run on startup.
     iteration = 1
     
-    logger.info("Executing immediate startup run (Telegram only)...")
-    run_once(target="telegram")
+    logger.info(f"Executing immediate startup run ({target.upper()})...")
+    run_once(target=target)
     
     def job():
         nonlocal iteration
         iteration += 1
         logger.info(f"Scheduler tick: Iteration {iteration}")
         
-        # Every even iteration (e.g. 2nd run = 4 hours, 4th run = 8 hours...) send to both.
-        if iteration % 2 == 0:
-            logger.info("4-hour interval reached. Sending to BOTH Telegram and WhatsApp.")
-            run_once(target="all")
+        if target == "all":
+            # Every even iteration (e.g. 2nd run = 4 hours, 4th run = 8 hours...) send to both.
+            if iteration % 2 == 0:
+                logger.info("4-hour interval reached. Sending to BOTH Telegram and WhatsApp.")
+                run_once(target="all")
+            else:
+                logger.info("2-hour interval reached. Sending to Telegram only.")
+                run_once(target="telegram")
         else:
-            logger.info("2-hour interval reached. Sending to Telegram only.")
-            run_once(target="telegram")
+            logger.info(f"Interval reached. Sending to {target.upper()} only.")
+            run_once(target=target)
 
-    # Schedule the job to run every N minutes
-    schedule.every(interval_minutes).minutes.do(job)
+    # Schedule the job
+    if times:
+        time_list = [t.strip() for t in times.split(',')]
+        logger.info(f"Scheduling daily runs at: {', '.join(time_list)}")
+        for t in time_list:
+            schedule.every().day.at(t).do(job)
+    else:
+        logger.info(f"Ticking every {interval_minutes} minutes.")
+        schedule.every(interval_minutes).minutes.do(job)
     
-    logger.info(f"Scheduler is active. Next run in {interval_minutes} minutes.")
+    logger.info("Scheduler is active. Waiting for next run...")
     while True:
         try:
             schedule.run_pending()
@@ -131,6 +138,13 @@ def main():
         help="Interval in minutes for loop execution. Default is 120 (2 hours)."
     )
     
+    parser.add_argument(
+        "--times",
+        type=str,
+        default=config.SCHEDULE_TIMES if hasattr(config, 'SCHEDULE_TIMES') else "",
+        help="Comma-separated list of specific times to run daily (e.g., '08:00,12:00,18:00'). Overrides --interval if provided."
+    )
+    
     args = parser.parse_args()
     
     # Ensure .env is loaded
@@ -138,7 +152,7 @@ def main():
         logger.warning("Warning: .env file not found. Script will rely on system environment variables.")
         
     if args.loop:
-        run_scheduler_loop(args.interval)
+        run_scheduler_loop(args.interval, args.target, args.times)
     else:
         success = run_once(args.target)
         sys.exit(0 if success else 1)
