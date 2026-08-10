@@ -76,7 +76,15 @@ def scrape_grafana_screenshot(context) -> str:
             page.wait_for_load_state("networkidle")
             
         # Give Grafana panels a few seconds to load metrics and render graphs
-        page.wait_for_timeout(35000)
+        logger.info("Waiting for Grafana panels to render...")
+        try:
+            # Wait for panel contents or canvases to appear to ensure data is rendering
+            page.wait_for_selector('div[class*="panel-container"], canvas, div[data-testid*="panel"]', state="visible", timeout=60000)
+            logger.info("Grafana panels detected. Waiting an additional 15 seconds for graphs to fully populate...")
+            page.wait_for_timeout(15000)
+        except Exception:
+            logger.warning("Could not detect specific Grafana panels. Falling back to a long 60-second wait.")
+            page.wait_for_timeout(60000)
         
         # Take a screenshot
         page.screenshot(path=screenshot_path, full_page=True)

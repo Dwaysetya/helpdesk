@@ -3,7 +3,7 @@ import sys
 import logging
 import time
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import config
 from scraper import scrape_all_dashboards
@@ -15,6 +15,49 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
 logger = logging.getLogger("KibanaAutomation")
+
+# Global state for prepared reports
+PREPARED_REPORT_DATA = None
+PREPARED_SCREENSHOT_PATH = None
+
+def prepare_report():
+    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH
+    logger.info("Starting preparation phase: Scraping dashboards...")
+    try:
+        PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH = scrape_all_dashboards()
+        logger.info("Preparation phase finished.")
+    except Exception as e:
+        logger.error(f"Error during preparation phase: {e}")
+
+def send_prepared_report(target: str):
+    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH
+    import asyncio
+    
+    if not PREPARED_REPORT_DATA:
+        logger.warning("No prepared report found! Running fallback scrape...")
+        return run_once(target)
+        
+    logger.info(f"Sending prepared report. Target: {target.upper()}")
+    report_text = format_report_message(PREPARED_REPORT_DATA)
+    
+    print("\n--- FORMATTED REPORT ---")
+    print(report_text)
+    print("------------------------\n")
+    
+    success_telegram = True
+    success_whatsapp = True
+    
+    if target in ["telegram", "all"]:
+        success_telegram = asyncio.run(send_telegram_message(report_text, PREPARED_SCREENSHOT_PATH))
+        
+    if target in ["whatsapp", "all"]:
+        success_whatsapp = send_whatsapp_message(report_text)
+        
+    # Clear after sending
+    PREPARED_REPORT_DATA = None
+    PREPARED_SCREENSHOT_PATH = None
+    
+    return success_telegram and success_whatsapp
 
 def run_once(target: str):
     """
@@ -52,6 +95,11 @@ def run_once(target: str):
     # If anything failed, return False
     return success_telegram and success_whatsapp
 
+def get_prepare_time(t_str: str, minutes: int = 5) -> str:
+    t_obj = datetime.strptime(t_str, "%H:%M")
+    t_obj = t_obj - timedelta(minutes=minutes)
+    return t_obj.strftime("%H:%M")
+
 def run_scheduler_loop(interval_minutes: int, target: str, times: str = None):
     """
     Runs a background daemon loop using Python's schedule library.
@@ -68,38 +116,65 @@ def run_scheduler_loop(interval_minutes: int, target: str, times: str = None):
     
     # We maintain a state counter.
     # Note: On startup, we run once immediately.
-    # We ask if they want to run immediately, or just start scheduling. Let's run a test run on startup.
     iteration = 1
     
     logger.info(f"Executing immediate startup run ({target.upper()})...")
     run_once(target=target)
     
-    def job():
-        nonlocal iteration
-        iteration += 1
-        logger.info(f"Scheduler tick: Iteration {iteration}")
-        
-        if target == "all":
-            # Every even iteration (e.g. 2nd run = 4 hours, 4th run = 8 hours...) send to both.
-            if iteration % 2 == 0:
-                logger.info("4-hour interval reached. Sending to BOTH Telegram and WhatsApp.")
-                run_once(target="all")
-            else:
-                logger.info("2-hour interval reached. Sending to Telegram only.")
-                run_once(target="telegram")
-        else:
-            logger.info(f"Interval reached. Sending to {target.upper()} only.")
-            run_once(target=target)
-
     # Schedule the job
     if times:
         time_list = [t.strip() for t in times.split(',')]
         logger.info(f"Scheduling daily runs at: {', '.join(time_list)}")
+        
         for t in time_list:
-            schedule.every().day.at(t).do(job)
+            prep_t = get_prepare_time(t, minutes=5)
+            logger.info(f"  - Preparation scheduled at: {prep_t} for {t} send")
+            
+            def make_prep_job(target_time):
+                def _prep():
+                    logger.info(f"Preparation triggered for upcoming {target_time} report.")
+                    prepare_report()
+                return _prep
+                
+            def make_send_job(target_time):
+                def _send():
+                    nonlocal iteration
+                    iteration += 1
+                    logger.info(f"Scheduler tick: Iteration {iteration} (Target Time: {target_time})")
+                    
+                    target_to_send = target
+                    if target == "all":
+                        if iteration % 2 == 0:
+                            logger.info("Even interval reached. Sending to BOTH Telegram and WhatsApp.")
+                            target_to_send = "all"
+                        else:
+                            logger.info("Odd interval reached. Sending to Telegram only.")
+                            target_to_send = "telegram"
+                            
+                    send_prepared_report(target=target_to_send)
+                return _send
+                
+            schedule.every().day.at(prep_t).do(make_prep_job(t))
+            schedule.every().day.at(t).do(make_send_job(t))
     else:
         logger.info(f"Ticking every {interval_minutes} minutes.")
-        schedule.every(interval_minutes).minutes.do(job)
+        def job_interval():
+            nonlocal iteration
+            iteration += 1
+            logger.info(f"Scheduler tick: Iteration {iteration}")
+            
+            if target == "all":
+                if iteration % 2 == 0:
+                    logger.info("Even interval reached. Sending to BOTH Telegram and WhatsApp.")
+                    run_once(target="all")
+                else:
+                    logger.info("Odd interval reached. Sending to Telegram only.")
+                    run_once(target="telegram")
+            else:
+                logger.info(f"Interval reached. Sending to {target.upper()} only.")
+                run_once(target=target)
+
+        schedule.every(interval_minutes).minutes.do(job_interval)
     
     logger.info("Scheduler is active. Waiting for next run...")
     while True:

@@ -74,11 +74,16 @@ async def send_telegram_message(text: str, photo_path: str = None) -> bool:
             await client.send_message(chat_id, text, parse_mode='md')
             
         logger.info("Telegram message sent successfully.")
-        await client.disconnect()
         return True
     except Exception as e:
         logger.error(f"Failed to send Telegram message via Userbot: {str(e)}")
         return False
+    finally:
+        if 'client' in locals() and client:
+            try:
+                await client.disconnect()
+            except Exception as e:
+                logger.error(f"Error disconnecting client: {str(e)}")
 
 def send_whatsapp_message(text: str) -> bool:
     """
