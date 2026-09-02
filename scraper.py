@@ -86,9 +86,28 @@ def scrape_grafana_screenshot(context) -> str:
             logger.warning("Could not detect specific Grafana panels. Falling back to a long 60-second wait.")
             page.wait_for_timeout(60000)
         
-        # Take a screenshot
-        page.screenshot(path=screenshot_path, full_page=True)
-        logger.info(f"Grafana screenshot saved successfully to {screenshot_path}")
+        # Activate Opera and forcefully maximize it to fill the entire screen (2560x1600).
+        # This accurately reproduces the user's reference screenshot with the Mac Menu Bar visible at the top.
+        try:
+            import subprocess
+            logger.info("Activating and maximizing Opera via AppleScript...")
+            applescript = '''
+tell application "Finder"
+    set desktopBounds to bounds of window of desktop
+end tell
+tell application "Opera"
+    activate
+    set bounds of window 1 to desktopBounds
+end tell
+'''
+            subprocess.run(["osascript", "-e", applescript])
+            page.wait_for_timeout(2000) # Wait for window resize
+        except Exception as e:
+            logger.warning(f"Could not resize window via AppleScript: {e}")
+            
+        # Take an OS-level full-screen screenshot to capture the Mac menu bar and full browser
+        subprocess.run(["screencapture", "-x", screenshot_path])
+        logger.info(f"Grafana screenshot saved successfully to {screenshot_path} (AppleScript Maximized)")
         return screenshot_path
     except Exception as e:
         logger.error(f"Failed to scrape Grafana screenshot: {str(e)}")
@@ -105,9 +124,11 @@ def scrape_all_dashboards() -> tuple[dict, str]:
     
     logger.info("Initializing Playwright and launching browser...")
     with sync_playwright() as p:
-        # Launch browser (Chromium) with headless and custom options
+        # Launch browser (Chromium) with headless=False to allow OS screen capture
+        # Set up Chromium to launch Opera explicitly
         browser = p.chromium.launch(
-            headless=config.HEADLESS,
+            executable_path="/Applications/Opera.app/Contents/MacOS/Opera",
+            headless=False,
             args=[
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -115,10 +136,10 @@ def scrape_all_dashboards() -> tuple[dict, str]:
             ]
         )
         
-        # Create a browser context with a standard desktop viewport, User-Agent, and Jakarta timezone
+        # Use no_viewport=True so Playwright automatically resizes the internal page to match the OS window bounds perfectly
         context = browser.new_context(
-            viewport={"width": 1280, "height": 800},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            no_viewport=True,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 OPR/106.0.0.0",
             timezone_id="Asia/Jakarta"
         )
         

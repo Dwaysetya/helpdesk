@@ -28,7 +28,7 @@ KIBANA_USERNAME = os.getenv("KIBANA_USERNAME", "elastic")
 KIBANA_PASSWORD = os.getenv("KIBANA_PASSWORD", "ZOKBvOoqNBFrbtaVsVFd")
 
 # Grafana Settings
-GRAFANA_URL = os.getenv("GRAFANA_URL", "http://10.60.168.11:3030/d/84ff48f1-3262-475b-9bf5-809793699f2a/mo-dimas-aggr?kiosk")
+GRAFANA_URL = os.getenv("GRAFANA_URL", "http://10.60.168.11:3030/d/84ff48f1-3262-475b-9bf5-809793699f2a/mo-dimas-aggr")
 GRAFANA_USERNAME = os.getenv("GRAFANA_USERNAME", "tma-dev")
 GRAFANA_PASSWORD = os.getenv("GRAFANA_PASSWORD", "e1e175013a75")
 
