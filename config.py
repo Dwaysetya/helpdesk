@@ -28,7 +28,7 @@ KIBANA_USERNAME = os.getenv("KIBANA_USERNAME", "elastic")
 KIBANA_PASSWORD = os.getenv("KIBANA_PASSWORD", "ZOKBvOoqNBFrbtaVsVFd")
 
 # Grafana Settings
-GRAFANA_URL = os.getenv("GRAFANA_URL", "http://10.60.168.11:3030/d/84ff48f1-3262-475b-9bf5-809793699f2a/mo-dimas-aggr")
+GRAFANA_URL = os.getenv("GRAFANA_URL", "http://10.60.168.11:3030/d/84ff48f1-3262-475b-9bf5-809793699f2a/mo-dimas-aggr?from=now-3h&to=now")
 GRAFANA_USERNAME = os.getenv("GRAFANA_USERNAME", "tma-dev")
 GRAFANA_PASSWORD = os.getenv("GRAFANA_PASSWORD", "e1e175013a75")
 
@@ -48,7 +48,7 @@ SCHEDULE_TIMES = os.getenv("SCHEDULE_TIMES", "")
 DASHBOARDS = {
     "assurance": {
         "name": "Assurance",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/460024ff-9f05-4741-8b3a-78ad81da63f5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h%2Fh,to:now))",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/460024ff-9f05-4741-8b3a-78ad81da63f5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_hits_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Succes Rate Service"]) p.echMetricText__value',
     },
@@ -60,13 +60,13 @@ DASHBOARDS = {
     },
     "homepass": {
         "name": "Homepass",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/295c9906-7c3d-4689-8770-ab04db443e37?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h%2Fh,to:now))",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/295c9906-7c3d-4689-8770-ab04db443e37?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_hits_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Succes Rate Service"]) p.echMetricText__value',
     },
     "reservasi_homepass": {
         "name": "Reservasi Homepass",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/df50703d-0e5d-4096-800d-265596469dd5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h%2Fh,to:now))",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/df50703d-0e5d-4096-800d-265596469dd5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_id_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="P95 Latency"]) p.echMetricText__value',
     }
