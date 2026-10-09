@@ -115,7 +115,48 @@ end tell
     finally:
         page.close()
 
-def scrape_all_dashboards() -> tuple[dict, str]:
+def scrape_elastic_screenshot(context, url: str) -> str:
+    """
+    Navigates to the Elastic dashboard and takes a screenshot.
+    """
+    logger.info("Starting Elastic screenshot process...")
+    page = context.new_page()
+    screenshot_path = "elastic_screenshot.png"
+    
+    try:
+        page.goto(url, wait_until="load")
+        handle_kibana_login_if_needed(page)
+        
+        logger.info("Waiting for Elastic dashboard panels to render...")
+        page.wait_for_timeout(15000)
+        
+        try:
+            import subprocess
+            logger.info("Activating and maximizing Opera via AppleScript...")
+            applescript = '''
+tell application "Finder"
+    set desktopBounds to bounds of window of desktop
+end tell
+tell application "Opera"
+    activate
+    set bounds of window 1 to desktopBounds
+end tell
+'''
+            subprocess.run(["osascript", "-e", applescript])
+            page.wait_for_timeout(2000)
+        except Exception as e:
+            logger.warning(f"Could not resize window via AppleScript: {e}")
+            
+        subprocess.run(["screencapture", "-x", screenshot_path])
+        logger.info(f"Elastic screenshot saved successfully to {screenshot_path}")
+        return screenshot_path
+    except Exception as e:
+        logger.error(f"Failed to scrape Elastic screenshot: {str(e)}")
+        return ""
+    finally:
+        page.close()
+
+def scrape_all_dashboards(capture_elastic=False) -> tuple[dict, str, str]:
     """
     Opens Kibana dashboards using Playwright, waits for metrics to load,
     scrapes target numbers, and returns a structured dictionary of results.
@@ -240,20 +281,23 @@ def scrape_all_dashboards() -> tuple[dict, str]:
                 if page:
                     page.close()
                     
-        # Scrape Grafana screenshot
-        screenshot_path = scrape_grafana_screenshot(context)
+        grafana_path = scrape_grafana_screenshot(context)
+        elastic_path = ""
+        if capture_elastic:
+            elastic_url = "http://10.60.168.41:5601/app/dashboards#/view/4cb178b0-f0cd-4058-9784-ed81ff4162c1?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))"
+            elastic_path = scrape_elastic_screenshot(context, elastic_url)
 
         # Close the browser instance
         browser.close()
         
-    return results, screenshot_path
+    return results, grafana_path, elastic_path
 
 if __name__ == "__main__":
     # Test execution in headful mode for debugging
     import sys
     print("Testing Playwright Kibana Scraper run...")
     config.HEADLESS = False  # Toggle headful for visual verification
-    data, screenshot_path = scrape_all_dashboards()
+    data, g_path, e_path = scrape_all_dashboards(capture_elastic=True)
     print("Scrape results:")
     print(data)
-    print(f"Screenshot Path: {screenshot_path}")
+    print(f"Grafana Path: {g_path}, Elastic Path: {e_path}")

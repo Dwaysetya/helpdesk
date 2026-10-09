@@ -39,6 +39,7 @@ REPORT_TIME_FORMAT = "%H.%M"
 
 # Schedule Times (comma-separated, e.g., '08:00,12:00,16:00')
 SCHEDULE_TIMES = os.getenv("SCHEDULE_TIMES", "")
+WHATSAPP_SCHEDULE_TIMES = os.getenv("WHATSAPP_SCHEDULE_TIMES", "")
 
 # Kibana Dashboards Configuration
 # We specify the URL and selectors (CSS Selector or XPath) for each dashboard.
@@ -47,26 +48,26 @@ SCHEDULE_TIMES = os.getenv("SCHEDULE_TIMES", "")
 #   - XPath (e.g. 'xpath=//span[@class="hits"]') or starts with '//'
 DASHBOARDS = {
     "assurance": {
-        "name": "Assurance",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/460024ff-9f05-4741-8b3a-78ad81da63f5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
+        "name": "Assurance Q4",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/22164c79-5342-4bb6-8761-22f42c1572b4?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_hits_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Succes Rate Service"]) p.echMetricText__value',
     },
     "surrounding": {
-        "name": "Surrounding",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/08515597-bf02-4dc3-8c29-59e502a983d1?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
+        "name": "Surrounding Q4",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/6f7201bd-fd5a-4164-87b4-61a2ae4d81fb?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_hits_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Succes Rate Service"]) p.echMetricText__value',
     },
     "homepass": {
-        "name": "Homepass",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/295c9906-7c3d-4689-8770-ab04db443e37?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
+        "name": "Homepass Q4",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/f2eebe08-f7ab-4f81-8c9d-bd05b4c62873?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_hits_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Succes Rate Service"]) p.echMetricText__value',
     },
     "reservasi_homepass": {
-        "name": "Reservasi Homepass",
-        "url": "http://10.60.168.41:5601/app/dashboards#/view/df50703d-0e5d-4096-800d-265596469dd5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
+        "name": "Reservasi Homepass Q4",
+        "url": "http://10.60.168.41:5601/app/dashboards#/view/5752234c-1e75-469b-8e91-9960ffdef562?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now%2Fd,to:now%2Fd))",
         "total_id_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="Total API Hit"]) p.echMetricText__value',
         "success_rate_selector": 'div[data-test-subj="embeddablePanel"]:has(span[title="P95 Latency"]) p.echMetricText__value',
     }

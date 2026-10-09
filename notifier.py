@@ -3,6 +3,8 @@ import logging
 import requests
 import config
 import os
+import platform
+import threading
 
 logger = logging.getLogger("KibanaScraper.Notifier")
 
@@ -40,6 +42,42 @@ Total Homepass ID: **{reservasi_data.get('total_id', 'N/A')}**
 success reserve : {reservasi_data.get('success_rate', 'N/A')}"""
 
     return message
+
+def check_and_play_alarm(data: dict):
+    """
+    Checks the report data for 0 hits, N/A rates, or Errors, and plays a loud alarm if found.
+    """
+    alert = False
+    for cat, metrics in data.items():
+        hits = metrics.get('total_hits')
+        if hits is not None and (hits == '0' or hits == 'N/A' or 'Error' in hits):
+            alert = True
+        total_id = metrics.get('total_id')
+        if total_id is not None and (total_id == '0' or total_id == 'N/A' or 'Error' in total_id):
+            alert = True
+        rate = metrics.get('success_rate')
+        if rate is not None and (rate == 'N/A' or 'Error' in rate):
+            alert = True
+            
+    if alert:
+        logger.warning("🚨 Anomaly detected (0 hits or N/A)! Triggering loud audio alarm...")
+        def alarm_task():
+            if platform.system() == "Darwin":
+                # Set Mac volume to 100%
+                os.system("osascript -e 'set volume output volume 100'")
+                # Speak loudly and play a sound repeatedly
+                for _ in range(5):
+                    os.system('say "Wake up! Wake up! There is an issue with the Kibana report! Check the dashboard immediately!"')
+                    os.system('afplay /System/Library/Sounds/Glass.aiff')
+                    os.system('afplay /System/Library/Sounds/Ping.aiff')
+            else:
+                import time
+                for _ in range(10):
+                    print('\\a')
+                    time.sleep(1)
+                    
+        # Run in a background thread so it doesn't block the message sending
+        threading.Thread(target=alarm_task, daemon=True).start()
 
 async def send_telegram_message(text: str, photo_path: str = None) -> bool:
     """
@@ -85,19 +123,10 @@ async def send_telegram_message(text: str, photo_path: str = None) -> bool:
             except Exception as e:
                 logger.error(f"Error disconnecting client: {str(e)}")
 
-def send_whatsapp_message(text: str) -> bool:
+def send_whatsapp_message(text: str, photo_path: str = None) -> bool:
     """
     Sends a message to WhatsApp using a local/self-hosted HTTP API Gateway.
-    
-    Common self-hosted WhatsApp API Gateways and their payloads:
-    1. Evolution API (Recommended):
-       - Endpoint: POST http://localhost:8080/message/sendText/<instance_name>
-       - Headers: {"apikey": "<token>", "Content-Type": "application/json"}
-       - Body: {"number": "628123456789", "text": "...", "delay": 1200}
-       
-    2. wwebjs-api / Baileys custom HTTP endpoints:
-       - Endpoint: POST http://localhost:8080/send
-       - Body: {"to": "628123456789@c.us", "message": "..."}
+    Now supports sending images if photo_path is provided.
     """
     if not config.WHATSAPP_API_URL or not config.WHATSAPP_RECIPIENT_PHONE:
         logger.warning("WhatsApp API URL or Recipient Phone is not configured. Skipping WhatsApp notification.")
@@ -107,28 +136,45 @@ def send_whatsapp_message(text: str) -> bool:
         "Content-Type": "application/json"
     }
     
-    # Add authorization token header if configured
     if config.WHATSAPP_API_TOKEN:
-        # Standard header formats (e.g. Apikey, Authorization Bearer, etc.)
-        # Modify this according to your specific API Gateway requirements.
         headers["apikey"] = config.WHATSAPP_API_TOKEN
         headers["Authorization"] = f"Bearer {config.WHATSAPP_API_TOKEN}"
 
-    # Build payload dynamically. This is a generic layout.
-    # Adjust target payload structure depending on your WhatsApp API Gateway (e.g. 'number', 'to', 'chatId').
-    payload = {
-        "number": config.WHATSAPP_RECIPIENT_PHONE,  # Common format for Evolution API
-        "to": config.WHATSAPP_RECIPIENT_PHONE,      # Common format for wwebjs/Baileys
-        "phone": config.WHATSAPP_RECIPIENT_PHONE,   # Alternative common format
-        "text": text,                               # Message body key
-        "message": text                             # Alternative message body key
-    }
+    if photo_path and os.path.exists(photo_path):
+        import base64
+        try:
+            with open(photo_path, "rb") as f:
+                encoded_image = base64.b64encode(f.read()).decode("utf-8")
+            
+            # Auto-adapt Evolution API endpoint from sendText to sendMedia
+            api_url = config.WHATSAPP_API_URL.replace("/sendText", "/sendMedia")
+            
+            payload = {
+                "number": config.WHATSAPP_RECIPIENT_PHONE,
+                "to": config.WHATSAPP_RECIPIENT_PHONE,
+                "phone": config.WHATSAPP_RECIPIENT_PHONE,
+                "mediatype": "image",
+                "mimetype": "image/png",
+                "caption": text,
+                "media": encoded_image
+            }
+        except Exception as e:
+            logger.error(f"Failed to read image for WhatsApp: {e}")
+            return False
+    else:
+        api_url = config.WHATSAPP_API_URL
+        payload = {
+            "number": config.WHATSAPP_RECIPIENT_PHONE,
+            "to": config.WHATSAPP_RECIPIENT_PHONE,
+            "phone": config.WHATSAPP_RECIPIENT_PHONE,
+            "text": text,
+            "message": text
+        }
 
     try:
-        logger.info(f"Sending message to WhatsApp API Gateway: {config.WHATSAPP_API_URL}")
-        response = requests.post(config.WHATSAPP_API_URL, json=payload, headers=headers, timeout=20)
+        logger.info(f"Sending message to WhatsApp API Gateway: {api_url}")
+        response = requests.post(api_url, json=payload, headers=headers, timeout=30)
         
-        # Verify success criteria. Most APIs return 200 or 201 on success.
         if response.status_code in [200, 201]:
             logger.info("WhatsApp message sent successfully.")
             return True

@@ -6,8 +6,8 @@ with sync_playwright() as p:
     context = browser.new_context(viewport={"width": 1280, "height": 800}, timezone_id="Asia/Jakarta")
     page = context.new_page()
     
-    print("DEBUGGING RESERVASI Q3 (df50703d)")
-    page.goto("http://10.60.168.41:5601/app/dashboards#/view/df50703d-0e5d-4096-800d-265596469dd5?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h%2Fh,to:now))")
+    print("DEBUGGING RESERVASI Q4 (b55b83ac)")
+    page.goto("http://10.60.168.41:5601/app/dashboards#/view/b55b83ac-1ccb-4edb-b546-c967e9a050f1?_g=(filters:!(),refreshInterval:(pause:!t,value:60000),time:(from:now-24h%2Fh,to:now))")
     page.locator('input[name="username"], [data-test-subj="loginUsername"]').first.fill(config.KIBANA_USERNAME)
     page.locator('input[name="password"], [data-test-subj="loginPassword"]').first.fill(config.KIBANA_PASSWORD)
     page.locator('button[type="submit"], [data-test-subj="loginSubmit"]').first.click()
@@ -22,5 +22,5 @@ with sync_playwright() as p:
     percentages = page.locator('text=/\\d+\\.\\d+%/').all_inner_texts()
     print("PERCENTAGES:", percentages)
     
-    page.screenshot(path="debug_q3.png", full_page=True)
+    page.screenshot(path="debug_q4.png", full_page=True)
     browser.close()

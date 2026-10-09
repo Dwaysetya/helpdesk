@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 import config
 from scraper import scrape_all_dashboards
-from notifier import format_report_message, send_telegram_message, send_whatsapp_message
+from notifier import format_report_message, send_telegram_message, send_whatsapp_message, check_and_play_alarm
 
 # Setup logging
 logging.basicConfig(
@@ -19,26 +19,30 @@ logger = logging.getLogger("KibanaAutomation")
 # Global state for prepared reports
 PREPARED_REPORT_DATA = None
 PREPARED_SCREENSHOT_PATH = None
+PREPARED_ELASTIC_PATH = None
 
-def prepare_report():
-    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH
-    logger.info("Starting preparation phase: Scraping dashboards...")
+def prepare_report(capture_elastic=False):
+    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH, PREPARED_ELASTIC_PATH
+    logger.info(f"Starting preparation phase: Scraping dashboards (Elastic: {capture_elastic})...")
     try:
-        PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH = scrape_all_dashboards()
+        PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH, PREPARED_ELASTIC_PATH = scrape_all_dashboards(capture_elastic=capture_elastic)
         logger.info("Preparation phase finished.")
     except Exception as e:
         logger.error(f"Error during preparation phase: {e}")
 
-def send_prepared_report(target: str):
-    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH
+def send_prepared_report(target: str, use_elastic_for_wa: bool = False):
+    global PREPARED_REPORT_DATA, PREPARED_SCREENSHOT_PATH, PREPARED_ELASTIC_PATH
     import asyncio
     
     if not PREPARED_REPORT_DATA:
         logger.warning("No prepared report found! Running fallback scrape...")
-        return run_once(target)
+        return run_once(target, capture_elastic=use_elastic_for_wa)
         
     logger.info(f"Sending prepared report. Target: {target.upper()}")
     report_text = format_report_message(PREPARED_REPORT_DATA)
+    
+    # Check for anomaly and trigger alarm if needed
+    check_and_play_alarm(PREPARED_REPORT_DATA)
     
     print("\n--- FORMATTED REPORT ---")
     print(report_text)
@@ -51,26 +55,31 @@ def send_prepared_report(target: str):
         success_telegram = asyncio.run(send_telegram_message(report_text, PREPARED_SCREENSHOT_PATH))
         
     if target in ["whatsapp", "all"]:
-        success_whatsapp = send_whatsapp_message(report_text)
+        wa_photo = PREPARED_ELASTIC_PATH if use_elastic_for_wa else PREPARED_SCREENSHOT_PATH
+        success_whatsapp = send_whatsapp_message(report_text, wa_photo)
         
     # Clear after sending
     PREPARED_REPORT_DATA = None
     PREPARED_SCREENSHOT_PATH = None
+    PREPARED_ELASTIC_PATH = None
     
     return success_telegram and success_whatsapp
 
-def run_once(target: str):
+def run_once(target: str, capture_elastic=False):
     """
     Performs a single scraping run and distributes the report to the selected targets.
     """
     start_time = datetime.now()
-    logger.info(f"Starting automated report extraction. Target: {target.upper()}")
+    logger.info(f"Starting automated report extraction. Target: {target.upper()} (Elastic: {capture_elastic})")
     
     # 1. Scrape the dashboards
-    scraped_data, screenshot_path = scrape_all_dashboards()
+    scraped_data, screenshot_path, elastic_path = scrape_all_dashboards(capture_elastic=capture_elastic)
     
     # 2. Format the message
     report_text = format_report_message(scraped_data)
+    
+    # Check for anomaly and trigger alarm if needed
+    check_and_play_alarm(scraped_data)
     
     # Print the formatted report locally for console validation
     print("\n--- FORMATTED REPORT ---")
@@ -87,7 +96,8 @@ def run_once(target: str):
         success_telegram = asyncio.run(send_telegram_message(report_text, screenshot_path))
         
     if target in ["whatsapp", "all"]:
-        success_whatsapp = send_whatsapp_message(report_text)
+        wa_photo = elastic_path if capture_elastic else screenshot_path
+        success_whatsapp = send_whatsapp_message(report_text, wa_photo)
         
     duration = (datetime.now() - start_time).total_seconds()
     logger.info(f"Execution finished in {duration:.2f} seconds.")
@@ -132,26 +142,27 @@ def run_scheduler_loop(interval_minutes: int, target: str, times: str = None):
             
             def make_prep_job(target_time):
                 def _prep():
-                    logger.info(f"Preparation triggered for upcoming {target_time} report.")
-                    prepare_report()
+                    wa_times = [wt.strip() for wt in config.WHATSAPP_SCHEDULE_TIMES.split(',')] if hasattr(config, 'WHATSAPP_SCHEDULE_TIMES') and config.WHATSAPP_SCHEDULE_TIMES else []
+                    use_elastic = target_time in wa_times
+                    logger.info(f"Preparation triggered for upcoming {target_time} report (Elastic: {use_elastic}).")
+                    prepare_report(capture_elastic=use_elastic)
                 return _prep
                 
             def make_send_job(target_time):
                 def _send():
-                    nonlocal iteration
-                    iteration += 1
-                    logger.info(f"Scheduler tick: Iteration {iteration} (Target Time: {target_time})")
+                    logger.info(f"Scheduler tick (Target Time: {target_time})")
+                    wa_times = [wt.strip() for wt in config.WHATSAPP_SCHEDULE_TIMES.split(',')] if hasattr(config, 'WHATSAPP_SCHEDULE_TIMES') and config.WHATSAPP_SCHEDULE_TIMES else []
                     
                     target_to_send = target
                     if target == "all":
-                        if iteration % 2 == 0:
-                            logger.info("Even interval reached. Sending to BOTH Telegram and WhatsApp.")
+                        if target_time in wa_times:
+                            logger.info(f"Time {target_time} matches WhatsApp schedule. Sending to BOTH Telegram and WhatsApp.")
                             target_to_send = "all"
                         else:
-                            logger.info("Odd interval reached. Sending to Telegram only.")
+                            logger.info(f"Time {target_time} does not match WhatsApp schedule. Sending to Telegram only.")
                             target_to_send = "telegram"
                             
-                    send_prepared_report(target=target_to_send)
+                    send_prepared_report(target=target_to_send, use_elastic_for_wa=(target_time in wa_times))
                 return _send
                 
             schedule.every().day.at(prep_t).do(make_prep_job(t))
@@ -161,18 +172,19 @@ def run_scheduler_loop(interval_minutes: int, target: str, times: str = None):
         def job_interval():
             nonlocal iteration
             iteration += 1
-            logger.info(f"Scheduler tick: Iteration {iteration}")
+            use_elastic = (iteration % 2 == 0)
+            logger.info(f"Scheduler tick: Iteration {iteration} (Elastic: {use_elastic})")
             
             if target == "all":
                 if iteration % 2 == 0:
                     logger.info("Even interval reached. Sending to BOTH Telegram and WhatsApp.")
-                    run_once(target="all")
+                    run_once(target="all", capture_elastic=use_elastic)
                 else:
                     logger.info("Odd interval reached. Sending to Telegram only.")
-                    run_once(target="telegram")
+                    run_once(target="telegram", capture_elastic=use_elastic)
             else:
                 logger.info(f"Interval reached. Sending to {target.upper()} only.")
-                run_once(target=target)
+                run_once(target=target, capture_elastic=use_elastic)
 
         schedule.every(interval_minutes).minutes.do(job_interval)
     
